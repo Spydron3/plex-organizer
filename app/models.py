@@ -63,6 +63,9 @@ class PlanItem(SQLModel, table=True):
     matched: bool = False
     status: ItemStatus = ItemStatus.pending
     error_message: Optional[str] = None
+    candidates: Optional[str] = None  # JSON-encoded list of up to 5 alternate matches
+    search_query: Optional[str] = None  # title used to search TVDB; user-editable
+    language: Optional[str] = None  # primary language of the currently applied match (3-letter code)
 
 
 class PlanItemUpdate(SQLModel):

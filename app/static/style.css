@@ -38,14 +38,43 @@ body {
 
 header {
   padding: 2rem 0 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
 h1 { margin: 0; font-size: 1.6rem; }
 .subtitle { color: var(--muted); margin: 0.25rem 0 0; }
 
+.icon-btn {
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+}
+
+.settings-group {
+  margin-bottom: 1rem;
+}
+.settings-group label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-bottom: 0.35rem;
+}
+.settings-group .hint { margin-top: 0.35rem; }
+.settings-group #language-filter {
+  width: 100%;
+  margin-bottom: 0.4rem;
+}
+.settings-group #preferred-languages {
+  width: 100%;
+  margin-bottom: 0.5rem;
+}
+
 main {
-  max-width: 960px;
-  margin: 0 auto;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -141,6 +170,18 @@ th { color: var(--muted); font-weight: 600; }
 
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; }
 
+.search-editor { display: flex; gap: 0.35rem; align-items: center; }
+.search-editor input { width: 140px; padding: 0.3rem 0.5rem; font-size: 0.82rem; }
+.search-editor select { width: 110px; padding: 0.3rem 0.4rem; font-size: 0.78rem; }
+.search-editor button { padding: 0.3rem 0.55rem; font-size: 0.8rem; }
+
+progress {
+  width: 140px;
+  height: 0.6rem;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
 .modal-overlay[hidden] {
   display: none;
 }
@@ -162,6 +203,7 @@ th { color: var(--muted); font-weight: 600; }
   padding: 1.25rem 1.5rem;
   width: min(520px, 92vw);
   max-height: 80vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }

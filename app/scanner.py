@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Iterator
+from typing import Callable, Iterator
 
 from guessit import guessit
 from mutagen import File as MutagenFile
@@ -59,6 +59,9 @@ class ScanResult:
         matched: bool = False,
         status: ItemStatus = ItemStatus.pending,
         error_message: str | None = None,
+        candidates: list[dict] | None = None,
+        search_query: str | None = None,
+        language: str | None = None,
     ):
         self.source_path = source_path
         self.target_relpath = target_relpath
@@ -73,20 +76,34 @@ class ScanResult:
         self.matched = matched
         self.status = status
         self.error_message = error_message
+        self.candidates = candidates
+        self.search_query = search_query
+        self.language = language
 
 
-def scan_movie_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
+def scan_movie_library(
+    root: Path,
+    tvdb: TvdbClient | None,
+    on_progress: Callable[[int, int], None] | None = None,
+    languages: list[str] | None = None,
+) -> list[ScanResult]:
     results = []
-    for path in iter_media_files(root, MediaType.movie):
+    files = list(iter_media_files(root, MediaType.movie))
+    total = len(files)
+    if on_progress:
+        on_progress(0, total)
+    for i, path in enumerate(files, start=1):
         guess = guessit(path.name)
         raw_title = str(guess.get("title") or path.stem)
         raw_year = guess.get("year")
         matched = False
-        title, year = raw_title, raw_year
+        title, year, language_used = raw_title, raw_year, None
+        candidates = []
         if tvdb:
-            hit = tvdb.search_movie(raw_title, raw_year)
-            if hit:
-                title, year = hit["title"], hit["year"] or raw_year
+            candidates = tvdb.search_movie_candidates(raw_title, raw_year, languages=languages)
+            if candidates:
+                best = candidates[0]
+                title, year, language_used = best["title"], best["year"] or raw_year, best.get("language")
                 matched = True
         relpath = naming.movie_relpath(title, year, path.suffix.lower())
         results.append(
@@ -98,15 +115,29 @@ def scan_movie_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
                 year=year,
                 matched=matched,
                 status=ItemStatus.pending if matched else ItemStatus.unmatched,
+                candidates=candidates,
+                search_query=raw_title,
+                language=language_used,
             )
         )
+        if on_progress:
+            on_progress(i, total)
     return results
 
 
-def scan_tv_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
+def scan_tv_library(
+    root: Path,
+    tvdb: TvdbClient | None,
+    on_progress: Callable[[int, int], None] | None = None,
+    languages: list[str] | None = None,
+) -> list[ScanResult]:
     results = []
-    show_cache: dict[str, dict | None] = {}
-    for path in iter_media_files(root, MediaType.tv):
+    show_cache: dict[str, list[dict]] = {}
+    files = list(iter_media_files(root, MediaType.tv))
+    total = len(files)
+    if on_progress:
+        on_progress(0, total)
+    for i, path in enumerate(files, start=1):
         guess = guessit(path.name)
         raw_show = str(guess.get("title") or path.parent.name)
         season = guess.get("season")
@@ -116,13 +147,21 @@ def scan_tv_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
         if isinstance(episode, list):
             episode = episode[0] if episode else None
 
-        show, year, tv_id, matched = raw_show, None, None, False
+        show, year, tv_id, language_used, matched = raw_show, None, None, None, False
+        candidates: list[dict] = []
         if tvdb:
             if raw_show not in show_cache:
-                show_cache[raw_show] = tvdb.search_tv(raw_show)
-            hit = show_cache[raw_show]
-            if hit:
-                show, year, tv_id, matched = hit["name"], hit["year"], hit["id"], True
+                show_cache[raw_show] = tvdb.search_tv_candidates(raw_show, languages=languages)
+            candidates = show_cache[raw_show]
+            if candidates:
+                best = candidates[0]
+                show, year, tv_id, language_used, matched = (
+                    best["name"],
+                    best["year"],
+                    best["id"],
+                    best.get("language"),
+                    True,
+                )
 
         if season is None or episode is None:
             results.append(
@@ -134,13 +173,20 @@ def scan_tv_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
                     matched=False,
                     status=ItemStatus.unmatched,
                     error_message="Could not determine season/episode from filename",
+                    candidates=candidates,
+                    search_query=raw_show,
+                    language=language_used,
                 )
             )
+            if on_progress:
+                on_progress(i, total)
             continue
 
         episode_title = None
         if tvdb and tv_id:
-            episode_title = tvdb.get_episode_title(tv_id, season, episode)
+            episode_title = tvdb.get_episode_title(
+                tv_id, season, episode, languages=[language_used] if language_used else None
+            )
 
         relpath = naming.tv_relpath(show, season, episode, episode_title, path.suffix.lower(), year)
         results.append(
@@ -154,14 +200,27 @@ def scan_tv_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
                 episode=episode,
                 matched=matched,
                 status=ItemStatus.pending if matched else ItemStatus.unmatched,
+                candidates=candidates,
+                search_query=raw_show,
+                language=language_used,
             )
         )
+        if on_progress:
+            on_progress(i, total)
     return results
 
 
-def scan_music_library(root: Path, mb: MusicBrainzClient | None) -> list[ScanResult]:
+def scan_music_library(
+    root: Path,
+    mb: MusicBrainzClient | None,
+    on_progress: Callable[[int, int], None] | None = None,
+) -> list[ScanResult]:
     results = []
-    for path in iter_media_files(root, MediaType.music):
+    files = list(iter_media_files(root, MediaType.music))
+    total = len(files)
+    if on_progress:
+        on_progress(0, total)
+    for i, path in enumerate(files, start=1):
         tags = _music_tags(path)
         artist, album, title, track = tags["artist"], tags["album"], tags["title"], tags["track"]
         matched = bool(artist and album and title)
@@ -191,4 +250,6 @@ def scan_music_library(root: Path, mb: MusicBrainzClient | None) -> list[ScanRes
                 status=ItemStatus.pending if matched else ItemStatus.unmatched,
             )
         )
+        if on_progress:
+            on_progress(i, total)
     return results

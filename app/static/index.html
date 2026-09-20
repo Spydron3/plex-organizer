@@ -8,30 +8,14 @@
 </head>
 <body>
   <header>
-    <h1>Plex Organizer</h1>
-    <p class="subtitle">Reorganize and rename your media library for Plex</p>
+    <div>
+      <h1>Plex Organizer</h1>
+      <p class="subtitle">Reorganize and rename your media library for Plex</p>
+    </div>
+    <button type="button" id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">&#9881;</button>
   </header>
 
   <main>
-    <section id="settings-section" class="card">
-      <h2>Settings</h2>
-      <div class="row">
-        <label for="tvdb-key">TheTVDB API key</label>
-        <input id="tvdb-key" type="password" placeholder="Paste your TheTVDB v4 API key" />
-        <button id="save-key-btn">Save</button>
-        <span id="tvdb-status" class="status"></span>
-      </div>
-      <div class="row">
-        <label for="tvdb-pin">Subscriber PIN (optional)</label>
-        <input id="tvdb-pin" type="password" placeholder="Only needed for legacy subscriber keys" />
-        <button id="save-pin-btn">Save</button>
-      </div>
-      <p class="hint">
-        Used to look up accurate movie/TV titles, years, and episode names. Get a free key at
-        thetvdb.com (Dashboard &rarr; API Keys). Music uses embedded file tags plus MusicBrainz, no key needed.
-      </p>
-    </section>
-
     <section id="libraries-section" class="card">
       <h2>Libraries</h2>
       <form id="add-library-form" class="row">
@@ -61,9 +45,12 @@
             <tr>
               <th></th>
               <th>Current path</th>
+              <th>Search title</th>
               <th>Proposed path</th>
               <th>Match</th>
+              <th>Lang</th>
               <th>Status</th>
+              <th></th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -84,6 +71,53 @@
       </table>
     </section>
   </main>
+
+  <div id="settings-modal" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Settings</h3>
+
+      <div class="settings-group">
+        <label for="tvdb-key">TheTVDB API key</label>
+        <div class="row">
+          <input id="tvdb-key" type="password" placeholder="Paste your TheTVDB v4 API key" />
+          <button id="save-key-btn">Save</button>
+          <span id="tvdb-status" class="status"></span>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label for="tvdb-pin">Subscriber PIN (optional)</label>
+        <div class="row">
+          <input id="tvdb-pin" type="password" placeholder="Only needed for legacy subscriber keys" />
+          <button id="save-pin-btn">Save</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <label for="preferred-languages">Preferred languages</label>
+        <input id="language-filter" type="text" placeholder="Filter languages…" />
+        <select id="preferred-languages" multiple size="8"></select>
+        <div class="row">
+          <button id="save-languages-btn">Save</button>
+          <span id="languages-status" class="status"></span>
+        </div>
+        <p class="hint">
+          Hold Ctrl/Cmd (or drag) to select multiple. Scans and research will prefer titles translated
+          into any of these languages, and these are the only options offered when you manually research
+          an item.
+        </p>
+      </div>
+
+      <p class="hint">
+        Get a free TheTVDB key at thetvdb.com (Dashboard &rarr; API Keys). Music uses embedded file
+        tags plus MusicBrainz, no key needed.
+      </p>
+
+      <div class="row modal-actions">
+        <button id="settings-close" class="primary">Close</button>
+      </div>
+    </div>
+  </div>
 
   <div id="browse-modal" class="modal-overlay" hidden>
     <div class="modal">

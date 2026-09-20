@@ -40,44 +40,110 @@ class TvdbClient:
             return int(value)
         return None
 
-    def search_movie(self, title: str, year: int | None = None) -> dict | None:
-        params = {"query": title, "type": "movie"}
+    def _translated_name(self, kind: str, tvdb_id: int, language: str) -> str | None:
+        try:
+            data = self._get(f"/{kind}/{tvdb_id}/translations/{language}")
+        except httpx.HTTPStatusError:
+            return None
+        return (data.get("data") or {}).get("name")
+
+    def _best_translation(self, kind: str, tvdb_id: int, languages: list[str]) -> tuple[str, str] | None:
+        """Try each preferred language in order; return (name, language) of the first hit."""
+        for lang in languages:
+            name = self._translated_name(kind, tvdb_id, lang)
+            if name:
+                return name, lang
+        return None
+
+    def search_movie_candidates(
+        self, title: str, year: int | None = None, limit: int = 5, languages: list[str] | None = None
+    ) -> list[dict]:
+        params = {"query": title, "type": "movie", "limit": limit}
         if year:
             params["year"] = year
         data = self._get("/search", **params)
         results = data.get("data") or []
         if not results and year:
-            data = self._get("/search", query=title, type="movie")
+            data = self._get("/search", query=title, type="movie", limit=limit)
             results = data.get("data") or []
-        if not results:
-            return None
-        best = results[0]
-        return {
-            "title": best.get("name") or title,
-            "year": self._year_int(best.get("year")) or year,
-        }
-
-    def search_tv(self, title: str) -> dict | None:
-        data = self._get("/search", query=title, type="series")
-        results = data.get("data") or []
-        if not results:
-            return None
-        best = results[0]
-        tvdb_id = best.get("tvdb_id")
-        return {
-            "id": int(tvdb_id) if tvdb_id and str(tvdb_id).isdigit() else None,
-            "name": best.get("name") or title,
-            "year": self._year_int(best.get("year")),
-        }
-
-    def get_episode_title(self, series_id: int, season: int, episode: int) -> str | None:
-        try:
-            data = self._get(
-                f"/series/{series_id}/episodes/default",
-                page=0,
-                season=season,
-                episodeNumber=episode,
+        candidates = []
+        for r in results[:limit]:
+            tvdb_id = r.get("tvdb_id")
+            if not tvdb_id or not str(tvdb_id).isdigit():
+                continue
+            tvdb_id_int = int(tvdb_id)
+            name = r.get("name") or title
+            record_language = r.get("primary_language")
+            # A record's `name` is always its primary-language title, even
+            # when a translation exists in a preferred language - fetch it
+            # explicitly rather than only ever showing the original title.
+            wanted = [lang for lang in (languages or []) if lang != record_language]
+            if wanted:
+                hit = self._best_translation("movies", tvdb_id_int, wanted)
+                if hit:
+                    name, record_language = hit
+            candidates.append(
+                {
+                    "id": tvdb_id_int,
+                    "title": name,
+                    "year": self._year_int(r.get("year")) or year,
+                    "language": record_language,
+                }
             )
+        return candidates
+
+    def search_tv_candidates(
+        self, title: str, limit: int = 5, languages: list[str] | None = None
+    ) -> list[dict]:
+        data = self._get("/search", query=title, type="series", limit=limit)
+        results = data.get("data") or []
+        candidates = []
+        for r in results[:limit]:
+            tvdb_id = r.get("tvdb_id")
+            if not tvdb_id or not str(tvdb_id).isdigit():
+                continue
+            tvdb_id_int = int(tvdb_id)
+            name = r.get("name") or title
+            record_language = r.get("primary_language")
+            wanted = [lang for lang in (languages or []) if lang != record_language]
+            if wanted:
+                hit = self._best_translation("series", tvdb_id_int, wanted)
+                if hit:
+                    name, record_language = hit
+            candidates.append(
+                {
+                    "id": tvdb_id_int,
+                    "name": name,
+                    "year": self._year_int(r.get("year")),
+                    "language": record_language,
+                }
+            )
+        return candidates
+
+    def list_languages(self) -> list[dict]:
+        data = self._get("/languages")
+        return [{"id": lang["id"], "name": lang["name"]} for lang in (data.get("data") or [])]
+
+    def get_episode_title(
+        self, series_id: int, season: int, episode: int, languages: list[str] | None = None
+    ) -> str | None:
+        for lang in languages or []:
+            try:
+                data = self._get(
+                    f"/series/{series_id}/episodes/default/{lang}",
+                    page=0,
+                    season=season,
+                    episodeNumber=episode,
+                )
+            except httpx.HTTPStatusError:
+                continue
+            episodes = (data.get("data") or {}).get("episodes") or []
+            for ep in episodes:
+                if ep.get("seasonNumber") == season and ep.get("number") == episode:
+                    return ep.get("name")
+
+        try:
+            data = self._get(f"/series/{series_id}/episodes/default", page=0, season=season, episodeNumber=episode)
         except httpx.HTTPStatusError:
             return None
         episodes = (data.get("data") or {}).get("episodes") or []

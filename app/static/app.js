@@ -13,6 +13,55 @@ async function api(path, options = {}) {
 }
 
 let currentPlanId = null;
+let LANGUAGES = [];
+let PREFERRED_LANGUAGES = [];
+
+async function loadLanguages() {
+  try {
+    LANGUAGES = await api("/api/settings/languages");
+  } catch {
+    LANGUAGES = [];
+  }
+  renderLanguageMultiSelect();
+}
+
+async function loadPreferredLanguages() {
+  try {
+    const data = await api("/api/settings/preferred-languages");
+    PREFERRED_LANGUAGES = data.languages || [];
+  } catch {
+    PREFERRED_LANGUAGES = [];
+  }
+  renderLanguageMultiSelect();
+}
+
+// PREFERRED_LANGUAGES is the source of truth; the <select> only ever shows a
+// filtered subset, so selections on hidden options must not be lost when the
+// filter changes — the select's `change` handler keeps PREFERRED_LANGUAGES in
+// sync with whatever's currently visible, leaving hidden entries untouched.
+function renderLanguageMultiSelect() {
+  const select = $("#preferred-languages");
+  const filter = $("#language-filter").value.trim().toLowerCase();
+  const list = filter ? LANGUAGES.filter((l) => l.name.toLowerCase().includes(filter)) : LANGUAGES;
+  select.innerHTML = list
+    .map(
+      (l) =>
+        `<option value="${l.id}" ${PREFERRED_LANGUAGES.includes(l.id) ? "selected" : ""}>${escapeHtml(l.name)}</option>`
+    )
+    .join("");
+}
+
+$("#language-filter").addEventListener("input", renderLanguageMultiSelect);
+
+$("#preferred-languages").addEventListener("change", () => {
+  const select = $("#preferred-languages");
+  const renderedIds = Array.from(select.options).map((o) => o.value);
+  const selectedNow = new Set(Array.from(select.selectedOptions).map((o) => o.value));
+  PREFERRED_LANGUAGES = PREFERRED_LANGUAGES.filter((id) => !renderedIds.includes(id) || selectedNow.has(id));
+  for (const id of selectedNow) {
+    if (!PREFERRED_LANGUAGES.includes(id)) PREFERRED_LANGUAGES.push(id);
+  }
+});
 
 // ---------- Settings ----------
 
@@ -28,12 +77,36 @@ $("#save-key-btn").addEventListener("click", async () => {
   await api("/api/settings/tvdb-key", { method: "POST", body: JSON.stringify({ value }) });
   $("#tvdb-key").value = "";
   await loadTvdbStatus();
+  await loadLanguages();
 });
 
 $("#save-pin-btn").addEventListener("click", async () => {
   const value = $("#tvdb-pin").value.trim();
   await api("/api/settings/tvdb-pin", { method: "POST", body: JSON.stringify({ value }) });
   $("#tvdb-pin").value = "";
+});
+
+$("#save-languages-btn").addEventListener("click", async () => {
+  const data = await api("/api/settings/preferred-languages", {
+    method: "POST",
+    body: JSON.stringify({ languages: PREFERRED_LANGUAGES }),
+  });
+  PREFERRED_LANGUAGES = data.languages || [];
+  const status = $("#languages-status");
+  status.textContent = PREFERRED_LANGUAGES.length ? `Saved (${PREFERRED_LANGUAGES.length})` : "Saved (none)";
+  status.className = "status ok";
+});
+
+$("#settings-btn").addEventListener("click", () => {
+  $("#settings-modal").hidden = false;
+  $("#language-filter").value = "";
+  renderLanguageMultiSelect();
+});
+$("#settings-close").addEventListener("click", () => {
+  $("#settings-modal").hidden = true;
+});
+$("#settings-modal").addEventListener("click", (e) => {
+  if (e.target.id === "settings-modal") $("#settings-modal").hidden = true;
 });
 
 // ---------- Libraries ----------
@@ -47,7 +120,7 @@ async function loadLibraries() {
     tr.innerHTML = `
       <td class="mono">${escapeHtml(lib.path)}</td>
       <td>${lib.type}</td>
-      <td>
+      <td id="lib-actions-${lib.id}">
         <button data-scan="${lib.id}">Scan</button>
         <button data-remove="${lib.id}" class="danger">Remove</button>
       </td>`;
@@ -72,23 +145,62 @@ $("#libraries-table").addEventListener("click", async (e) => {
   const scanId = e.target.getAttribute("data-scan");
   const removeId = e.target.getAttribute("data-remove");
   if (scanId) {
-    e.target.disabled = true;
-    e.target.textContent = "Scanning…";
-    try {
-      const plan = await api(`/api/libraries/${scanId}/scan`, { method: "POST" });
-      await openPlan(plan.id);
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      e.target.disabled = false;
-      e.target.textContent = "Scan";
-    }
+    await startScan(scanId);
   } else if (removeId) {
     if (!confirm("Remove this library from the app? Files on disk are not touched.")) return;
     await api(`/api/libraries/${removeId}`, { method: "DELETE" });
     await loadLibraries();
   }
 });
+
+async function startScan(libraryId) {
+  const cell = document.getElementById(`lib-actions-${libraryId}`);
+  cell.innerHTML = `
+    <progress id="scan-bar-${libraryId}" value="0" max="1"></progress>
+    <span id="scan-label-${libraryId}" class="hint">Starting…</span>`;
+
+  try {
+    await api(`/api/libraries/${libraryId}/scan`, { method: "POST" });
+  } catch (err) {
+    alert(err.message);
+    await loadLibraries();
+    return;
+  }
+
+  pollScan(libraryId);
+}
+
+async function pollScan(libraryId) {
+  let state;
+  try {
+    state = await api(`/api/libraries/${libraryId}/scan-progress`);
+  } catch (err) {
+    alert(err.message);
+    await loadLibraries();
+    return;
+  }
+
+  const bar = document.getElementById(`scan-bar-${libraryId}`);
+  const label = document.getElementById(`scan-label-${libraryId}`);
+  if (bar && label) {
+    const total = Math.max(state.total, 1);
+    bar.max = total;
+    bar.value = state.processed;
+    label.textContent = state.total
+      ? `${state.processed} / ${state.total} files`
+      : "Scanning…";
+  }
+
+  if (state.status === "done") {
+    await openPlan(state.plan_id);
+    await loadLibraries();
+  } else if (state.status === "error") {
+    alert(`Scan failed: ${state.error}`);
+    await loadLibraries();
+  } else {
+    setTimeout(() => pollScan(libraryId), 400);
+  }
+}
 
 // ---------- Folder browser ----------
 
@@ -164,6 +276,53 @@ function badge(text, cls) {
   return `<span class="badge ${cls}">${escapeHtml(text)}</span>`;
 }
 
+function candidatePicker(item, disabledAttr) {
+  if (!item.candidates) return "";
+  let candidates;
+  try {
+    candidates = JSON.parse(item.candidates);
+  } catch {
+    return "";
+  }
+  if (!candidates.length) return "";
+
+  const matchLabel = (c) => {
+    const name = c.title || c.name;
+    return c.year ? `${name} (${c.year})` : name;
+  };
+  const displayLabel = (c) => matchLabel(c) + (c.language ? ` [${c.language}]` : "");
+  const selectedIndex = candidates.findIndex(
+    (c) => matchLabel(c) === (item.year ? `${item.title} (${item.year})` : item.title)
+  );
+  const options = candidates
+    .map((c, i) => `<option value="${i}" ${i === selectedIndex ? "selected" : ""}>${escapeHtml(displayLabel(c))}</option>`)
+    .join("");
+  return `<select data-select-item="${item.id}" ${disabledAttr}>${options}</select>`;
+}
+
+function searchTitleEditor(item, disabledAttr) {
+  if (item.media_type !== "movie" && item.media_type !== "tv") return "";
+  const value = escapeHtml(item.search_query || "");
+  const preselected = item.language || PREFERRED_LANGUAGES[0] || "";
+  // Only offer the languages chosen in Settings; fall back to the full list
+  // when none are configured yet, so the dropdown is never a dead end.
+  const choices = PREFERRED_LANGUAGES.length
+    ? LANGUAGES.filter((l) => PREFERRED_LANGUAGES.includes(l.id))
+    : LANGUAGES;
+  const langOptions = choices
+    .map((l) => `<option value="${l.id}" ${l.id === preselected ? "selected" : ""}>${escapeHtml(l.name)}</option>`)
+    .join("");
+  return `
+    <span class="search-editor">
+      <input type="text" class="mono" data-research-input="${item.id}" value="${value}" ${disabledAttr} />
+      <select data-research-lang="${item.id}" ${disabledAttr}>
+        <option value="">Any language</option>
+        ${langOptions}
+      </select>
+      <button type="button" data-research-btn="${item.id}" ${disabledAttr}>Search</button>
+    </span>`;
+}
+
 async function openPlan(planId) {
   currentPlanId = planId;
   const data = await api(`/api/plans/${planId}`);
@@ -189,9 +348,12 @@ function renderPlan(data) {
     tr.innerHTML = `
       <td><input type="checkbox" data-item="${item.id}" ${checked} ${disabled} /></td>
       <td class="mono">${escapeHtml(item.source_path)}</td>
+      <td>${searchTitleEditor(item, disabled)}</td>
       <td class="mono">${escapeHtml(item.target_path || "(unresolved)")}</td>
       <td>${item.matched ? badge("matched", "matched") : badge("unmatched", "unmatched")}</td>
-      <td>${badge(item.status, item.status)}</td>`;
+      <td class="mono">${item.language ? escapeHtml(item.language) : "—"}</td>
+      <td>${badge(item.status, item.status)}</td>
+      <td>${candidatePicker(item, disabled)}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -203,12 +365,56 @@ function renderPlan(data) {
 
 $("#plan-table").addEventListener("change", async (e) => {
   const itemId = e.target.getAttribute("data-item");
-  if (!itemId) return;
-  const status = e.target.checked ? "pending" : "skip";
-  await api(`/api/plans/${currentPlanId}/items/${itemId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ status }),
-  });
+  const selectItemId = e.target.getAttribute("data-select-item");
+  if (itemId) {
+    const status = e.target.checked ? "pending" : "skip";
+    await api(`/api/plans/${currentPlanId}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+  } else if (selectItemId) {
+    try {
+      await api(`/api/plans/${currentPlanId}/items/${selectItemId}/select`, {
+        method: "POST",
+        body: JSON.stringify({ candidate_index: Number(e.target.value) }),
+      });
+      const data = await api(`/api/plans/${currentPlanId}`);
+      renderPlan(data);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+});
+
+async function runResearch(itemId) {
+  const input = document.querySelector(`[data-research-input="${itemId}"]`);
+  const langSelect = document.querySelector(`[data-research-lang="${itemId}"]`);
+  const query = input.value.trim();
+  if (!query) return;
+  const language = langSelect ? langSelect.value : "";
+  try {
+    await api(`/api/plans/${currentPlanId}/items/${itemId}/research`, {
+      method: "POST",
+      body: JSON.stringify({ query, language }),
+    });
+    const data = await api(`/api/plans/${currentPlanId}`);
+    renderPlan(data);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+$("#plan-table").addEventListener("click", (e) => {
+  const itemId = e.target.getAttribute("data-research-btn");
+  if (itemId) runResearch(itemId);
+});
+
+$("#plan-table").addEventListener("keydown", (e) => {
+  const itemId = e.target.getAttribute("data-research-input");
+  if (itemId && e.key === "Enter") {
+    e.preventDefault();
+    runResearch(itemId);
+  }
 });
 
 $("#execute-plan-btn").addEventListener("click", async () => {
@@ -279,5 +485,7 @@ function escapeHtml(str) {
 // ---------- Init ----------
 
 loadTvdbStatus();
+loadLanguages();
+loadPreferredLanguages();
 loadLibraries();
 loadHistory();
