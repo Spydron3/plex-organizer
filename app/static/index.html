@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Plex Organizer</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Plex Organizer</h1>
+    <p class="subtitle">Reorganize and rename your media library for Plex</p>
+  </header>
+
+  <main>
+    <section id="settings-section" class="card">
+      <h2>Settings</h2>
+      <div class="row">
+        <label for="tmdb-key">TMDb API key</label>
+        <input id="tmdb-key" type="password" placeholder="Paste your TMDb v3 API key" />
+        <button id="save-key-btn">Save</button>
+        <span id="tmdb-status" class="status"></span>
+      </div>
+      <p class="hint">
+        Used to look up accurate movie/TV titles, years, and episode names. Get a free key at
+        themoviedb.org (Settings &rarr; API). Music uses embedded file tags plus MusicBrainz, no key needed.
+      </p>
+    </section>
+
+    <section id="libraries-section" class="card">
+      <h2>Libraries</h2>
+      <form id="add-library-form" class="row">
+        <input id="new-path" type="text" placeholder="/absolute/path/to/library" required />
+        <button type="button" id="browse-btn">Browse…</button>
+        <select id="new-type">
+          <option value="movie">Movie</option>
+          <option value="tv">Series</option>
+          <option value="music">Music</option>
+        </select>
+        <button type="submit">Add Library</button>
+      </form>
+      <table id="libraries-table">
+        <thead>
+          <tr><th>Path</th><th>Type</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section id="plan-section" class="card" hidden>
+      <h2>Scan Plan <span id="plan-status" class="status"></span></h2>
+      <p id="plan-summary" class="hint"></p>
+      <div class="table-wrap">
+        <table id="plan-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Current path</th>
+              <th>Proposed path</th>
+              <th>Match</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="row">
+        <button id="execute-plan-btn" class="primary">Accept &amp; Execute</button>
+        <button id="decline-plan-btn" class="danger">Decline</button>
+        <span id="execute-result" class="status"></span>
+      </div>
+    </section>
+
+    <section id="history-section" class="card">
+      <h2>Plan History</h2>
+      <table id="history-table">
+        <thead><tr><th>ID</th><th>Library</th><th>Created</th><th>Status</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <div id="browse-modal" class="modal-overlay" hidden>
+    <div class="modal">
+      <h3>Choose a folder</h3>
+      <div id="browse-current" class="mono browse-current"></div>
+      <div id="browse-list" class="browse-list"></div>
+      <div class="row modal-actions">
+        <button id="browse-cancel">Cancel</button>
+        <button id="browse-select" class="primary">Select This Folder</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
