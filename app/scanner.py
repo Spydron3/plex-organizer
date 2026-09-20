@@ -8,7 +8,7 @@ from mutagen import File as MutagenFile
 from app import naming
 from app.extensions import EXTS_BY_TYPE, SUBTITLE_EXTS
 from app.metadata.musicbrainz import MusicBrainzClient
-from app.metadata.tmdb import TmdbClient
+from app.metadata.tvdb import TvdbClient
 from app.models import ItemStatus, MediaType
 
 
@@ -75,7 +75,7 @@ class ScanResult:
         self.error_message = error_message
 
 
-def scan_movie_library(root: Path, tmdb: TmdbClient | None) -> list[ScanResult]:
+def scan_movie_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
     results = []
     for path in iter_media_files(root, MediaType.movie):
         guess = guessit(path.name)
@@ -83,8 +83,8 @@ def scan_movie_library(root: Path, tmdb: TmdbClient | None) -> list[ScanResult]:
         raw_year = guess.get("year")
         matched = False
         title, year = raw_title, raw_year
-        if tmdb:
-            hit = tmdb.search_movie(raw_title, raw_year)
+        if tvdb:
+            hit = tvdb.search_movie(raw_title, raw_year)
             if hit:
                 title, year = hit["title"], hit["year"] or raw_year
                 matched = True
@@ -103,7 +103,7 @@ def scan_movie_library(root: Path, tmdb: TmdbClient | None) -> list[ScanResult]:
     return results
 
 
-def scan_tv_library(root: Path, tmdb: TmdbClient | None) -> list[ScanResult]:
+def scan_tv_library(root: Path, tvdb: TvdbClient | None) -> list[ScanResult]:
     results = []
     show_cache: dict[str, dict | None] = {}
     for path in iter_media_files(root, MediaType.tv):
@@ -117,9 +117,9 @@ def scan_tv_library(root: Path, tmdb: TmdbClient | None) -> list[ScanResult]:
             episode = episode[0] if episode else None
 
         show, year, tv_id, matched = raw_show, None, None, False
-        if tmdb:
+        if tvdb:
             if raw_show not in show_cache:
-                show_cache[raw_show] = tmdb.search_tv(raw_show)
+                show_cache[raw_show] = tvdb.search_tv(raw_show)
             hit = show_cache[raw_show]
             if hit:
                 show, year, tv_id, matched = hit["name"], hit["year"], hit["id"], True
@@ -139,8 +139,8 @@ def scan_tv_library(root: Path, tmdb: TmdbClient | None) -> list[ScanResult]:
             continue
 
         episode_title = None
-        if tmdb and tv_id:
-            episode_title = tmdb.get_episode_title(tv_id, season, episode)
+        if tvdb and tv_id:
+            episode_title = tvdb.get_episode_title(tv_id, season, episode)
 
         relpath = naming.tv_relpath(show, season, episode, episode_title, path.suffix.lower(), year)
         results.append(

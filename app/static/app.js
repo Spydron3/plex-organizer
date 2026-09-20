@@ -16,18 +16,24 @@ let currentPlanId = null;
 
 // ---------- Settings ----------
 
-async function loadTmdbStatus() {
-  const data = await api("/api/settings/tmdb-key");
-  const el = $("#tmdb-status");
+async function loadTvdbStatus() {
+  const data = await api("/api/settings/tvdb-key");
+  const el = $("#tvdb-status");
   el.textContent = data.configured ? "Key configured" : "No key set — matches will be filename-only";
   el.className = "status " + (data.configured ? "ok" : "warn");
 }
 
 $("#save-key-btn").addEventListener("click", async () => {
-  const value = $("#tmdb-key").value.trim();
-  await api("/api/settings/tmdb-key", { method: "POST", body: JSON.stringify({ value }) });
-  $("#tmdb-key").value = "";
-  await loadTmdbStatus();
+  const value = $("#tvdb-key").value.trim();
+  await api("/api/settings/tvdb-key", { method: "POST", body: JSON.stringify({ value }) });
+  $("#tvdb-key").value = "";
+  await loadTvdbStatus();
+});
+
+$("#save-pin-btn").addEventListener("click", async () => {
+  const value = $("#tvdb-pin").value.trim();
+  await api("/api/settings/tvdb-pin", { method: "POST", body: JSON.stringify({ value }) });
+  $("#tvdb-pin").value = "";
 });
 
 // ---------- Libraries ----------
@@ -272,6 +278,6 @@ function escapeHtml(str) {
 
 // ---------- Init ----------
 
-loadTmdbStatus();
+loadTvdbStatus();
 loadLibraries();
 loadHistory();

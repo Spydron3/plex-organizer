@@ -7,21 +7,39 @@ from app.models import AppSetting
 
 load_dotenv()
 
-TMDB_API_KEY_SETTING = "tmdb_api_key"
+TVDB_API_KEY_SETTING = "tvdb_api_key"
+TVDB_PIN_SETTING = "tvdb_pin"
 
 
-def get_tmdb_api_key(session: Session) -> str | None:
-    row = session.get(AppSetting, TMDB_API_KEY_SETTING)
+def get_tvdb_api_key(session: Session) -> str | None:
+    row = session.get(AppSetting, TVDB_API_KEY_SETTING)
     if row and row.value:
         return row.value
-    return os.environ.get("TMDB_API_KEY") or None
+    return os.environ.get("TVDB_API_KEY") or None
 
 
-def set_tmdb_api_key(session: Session, value: str) -> None:
-    row = session.get(AppSetting, TMDB_API_KEY_SETTING)
+def set_tvdb_api_key(session: Session, value: str) -> None:
+    row = session.get(AppSetting, TVDB_API_KEY_SETTING)
     if row:
         row.value = value
     else:
-        row = AppSetting(key=TMDB_API_KEY_SETTING, value=value)
+        row = AppSetting(key=TVDB_API_KEY_SETTING, value=value)
+    session.add(row)
+    session.commit()
+
+
+def get_tvdb_pin(session: Session) -> str | None:
+    row = session.get(AppSetting, TVDB_PIN_SETTING)
+    if row and row.value:
+        return row.value
+    return os.environ.get("TVDB_PIN") or None
+
+
+def set_tvdb_pin(session: Session, value: str) -> None:
+    row = session.get(AppSetting, TVDB_PIN_SETTING)
+    if row:
+        row.value = value
+    else:
+        row = AppSetting(key=TVDB_PIN_SETTING, value=value)
     session.add(row)
     session.commit()

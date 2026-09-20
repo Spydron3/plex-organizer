@@ -6,10 +6,10 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app.executor import execute_move
 from app.metadata.musicbrainz import MusicBrainzClient
-from app.metadata.tmdb import TmdbClient
+from app.metadata.tvdb import TvdbClient
 from app.models import ItemStatus, LibraryPath, MediaType, PlanItem, PlanItemUpdate, PlanStatus, ScanPlan
 from app.scanner import scan_movie_library, scan_music_library, scan_tv_library
-from app.settings import get_tmdb_api_key
+from app.settings import get_tvdb_api_key, get_tvdb_pin
 
 router = APIRouter(prefix="/api", tags=["plans"])
 
@@ -24,22 +24,23 @@ def scan_library(library_id: int, session: Session = Depends(get_session)):
     if not root.exists():
         raise HTTPException(400, f"Library path no longer exists: {root}")
 
-    tmdb_key = get_tmdb_api_key(session)
+    tvdb_key = get_tvdb_api_key(session)
+    tvdb_pin = get_tvdb_pin(session)
 
     if library.type == MediaType.movie:
-        tmdb = TmdbClient(tmdb_key) if tmdb_key else None
+        tvdb = TvdbClient(tvdb_key, tvdb_pin) if tvdb_key else None
         try:
-            results = scan_movie_library(root, tmdb)
+            results = scan_movie_library(root, tvdb)
         finally:
-            if tmdb:
-                tmdb.close()
+            if tvdb:
+                tvdb.close()
     elif library.type == MediaType.tv:
-        tmdb = TmdbClient(tmdb_key) if tmdb_key else None
+        tvdb = TvdbClient(tvdb_key, tvdb_pin) if tvdb_key else None
         try:
-            results = scan_tv_library(root, tmdb)
+            results = scan_tv_library(root, tvdb)
         finally:
-            if tmdb:
-                tmdb.close()
+            if tvdb:
+                tvdb.close()
     else:
         mb = MusicBrainzClient()
         try:

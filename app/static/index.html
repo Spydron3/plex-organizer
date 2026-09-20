@@ -16,14 +16,19 @@
     <section id="settings-section" class="card">
       <h2>Settings</h2>
       <div class="row">
-        <label for="tmdb-key">TMDb API key</label>
-        <input id="tmdb-key" type="password" placeholder="Paste your TMDb v3 API key" />
+        <label for="tvdb-key">TheTVDB API key</label>
+        <input id="tvdb-key" type="password" placeholder="Paste your TheTVDB v4 API key" />
         <button id="save-key-btn">Save</button>
-        <span id="tmdb-status" class="status"></span>
+        <span id="tvdb-status" class="status"></span>
+      </div>
+      <div class="row">
+        <label for="tvdb-pin">Subscriber PIN (optional)</label>
+        <input id="tvdb-pin" type="password" placeholder="Only needed for legacy subscriber keys" />
+        <button id="save-pin-btn">Save</button>
       </div>
       <p class="hint">
         Used to look up accurate movie/TV titles, years, and episode names. Get a free key at
-        themoviedb.org (Settings &rarr; API). Music uses embedded file tags plus MusicBrainz, no key needed.
+        thetvdb.com (Dashboard &rarr; API Keys). Music uses embedded file tags plus MusicBrainz, no key needed.
       </p>
     </section>
 
