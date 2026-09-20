@@ -319,3 +319,16 @@ def cancel_plan(plan_id: int, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(plan)
     return plan
+
+
+@router.delete("/plans/{plan_id}")
+def delete_plan(plan_id: int, session: Session = Depends(get_session)):
+    plan = session.get(ScanPlan, plan_id)
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+    items = session.exec(select(PlanItem).where(PlanItem.plan_id == plan_id)).all()
+    for item in items:
+        session.delete(item)
+    session.delete(plan)
+    session.commit()
+    return {"ok": True}

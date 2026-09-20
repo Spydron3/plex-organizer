@@ -449,6 +449,10 @@ $("#decline-plan-btn").addEventListener("click", async () => {
   await loadHistory();
 });
 
+$("#save-plan-btn").addEventListener("click", () => {
+  $("#plan-section").hidden = true;
+});
+
 // ---------- History ----------
 
 async function loadHistory() {
@@ -466,14 +470,28 @@ async function loadHistory() {
       <td class="mono">${lib ? escapeHtml(lib.path) : plan.library_id}</td>
       <td>${new Date(plan.created_at + "Z").toLocaleString()}</td>
       <td>${badge(plan.status, badgeClass[plan.status] || "pending")}</td>
-      <td><button data-open="${plan.id}">Open</button></td>`;
+      <td>
+        <button data-open="${plan.id}">Open</button>
+        <button data-delete-plan="${plan.id}" class="danger">Delete</button>
+      </td>`;
     tbody.appendChild(tr);
   }
 }
 
 $("#history-table").addEventListener("click", async (e) => {
-  const id = e.target.getAttribute("data-open");
-  if (id) await openPlan(id);
+  const openId = e.target.getAttribute("data-open");
+  const deleteId = e.target.getAttribute("data-delete-plan");
+  if (openId) {
+    await openPlan(openId);
+  } else if (deleteId) {
+    if (!confirm("Delete this plan from history? Files on disk are not touched.")) return;
+    await api(`/api/plans/${deleteId}`, { method: "DELETE" });
+    if (String(currentPlanId) === deleteId) {
+      $("#plan-section").hidden = true;
+      currentPlanId = null;
+    }
+    await loadHistory();
+  }
 });
 
 function escapeHtml(str) {
